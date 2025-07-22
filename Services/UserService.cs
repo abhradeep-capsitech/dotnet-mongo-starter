@@ -32,7 +32,7 @@ namespace DotnetMongoStarter.Services
                 var user = await _dbContext.Users.Find(u => u.Email == email).FirstOrDefaultAsync();
                 return user;
             }
-            catch (MongoException ex)
+            catch (Exception ex)
             {
                 throw new ApiException("Database error while fetching user by email.", 500, new List<string> { ex.Message });
             }
@@ -43,11 +43,11 @@ namespace DotnetMongoStarter.Services
             try
             {
                 var user = await _dbContext.Users.Find(u => u.Id == userId).FirstOrDefaultAsync();
-                return user; 
+                return user;
             }
-            catch (MongoException ex)
+            catch (Exception ex)
             {
-                throw new ApiException("Database error while fetching user by ID.", 500, new List<string> { ex.Message });
+                throw new ApiException("Database error while fetching user by id.", 500, new List<string> { ex.Message });
             }
         }
 
@@ -58,7 +58,7 @@ namespace DotnetMongoStarter.Services
                 await _dbContext.Users.InsertOneAsync(user);
                 return user;
             }
-            catch (MongoException ex)
+            catch (Exception ex)
             {
                 throw new ApiException("Database error while creating user.", 500, new List<string> { ex.Message });
             }
@@ -70,13 +70,9 @@ namespace DotnetMongoStarter.Services
             {
                 var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
                 var update = Builders<User>.Update.Set(u => u.RefreshToken, refreshToken);
-                var result = await _dbContext.Users.UpdateOneAsync(filter, update);
-                if (result.MatchedCount == 0)
-                {
-                    throw new NotFoundException("User not found for token update.");
-                }
+                await _dbContext.Users.UpdateOneAsync(filter, update);
             }
-            catch (MongoException ex)
+            catch (Exception ex)
             {
                 throw new ApiException("Database error while saving user token.", 500, new List<string> { ex.Message });
             }
@@ -88,13 +84,9 @@ namespace DotnetMongoStarter.Services
             {
                 var filter = Builders<User>.Filter.Eq(u => u.Id, userId);
                 var update = Builders<User>.Update.Set(u => u.RefreshToken, null);
-                var result = await _dbContext.Users.UpdateOneAsync(filter, update);
-                if (result.MatchedCount == 0)
-                {
-                    throw new NotFoundException("User not found for token deletion.");
-                }
+                await _dbContext.Users.UpdateOneAsync(filter, update);
             }
-            catch (MongoException ex)
+            catch (Exception ex)
             {
                 throw new ApiException("Database error while deleting user token.", 500, new List<string> { ex.Message });
             }

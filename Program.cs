@@ -10,11 +10,16 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Controllers
 builder.Services.AddControllers();
+
+// Swagger + JWT Support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    // Add JWT Bearer security definition
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "DotnetMongoStarter API", Version = "v1" });
+
+    // JWT Bearer Auth for Swagger
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -22,10 +27,9 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your valid token.\n\nExample: `Bearer eyJhbGciOi...`"
+        Description = "Enter 'Bearer' [space] and your JWT.\nExample: `Bearer eyJhbGciOi...`"
     });
 
-    // Apply JWT Bearer to all operations
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -42,107 +46,85 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Db config
+// MongoDB settings
 builder.Services.Configure<DbSettings>(builder.Configuration.GetSection("DbConfig"));
 builder.Services.AddSingleton<DbContext>();
 
-// dependency injection
+// Dependency Injection
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-// jwt config
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    var config = builder.Configuration;
-    options.TokenValidationParameters = new TokenValidationParameters
+// JWT Authentication Configuration
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
+        var config = builder.Configuration;
+        var key = Encoding.UTF8.GetBytes(config["JwtConfig:Key"]!);
 
-        ValidIssuer = config["JwtConfig:Issuer"]!,
-        ValidAudience = config["JwtConfig:Audience"]!,
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(config["JwtConfig:Key"]!)
-        )
-    };
-    // Handle authentication failures
-    options.Events = new JwtBearerEvents
-    {
-        OnAuthenticationFailed = context =>
+        options.TokenValidationParameters = new TokenValidationParameters
         {
-            context.NoResult(); // Prevent default behavior
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = config["JwtConfig:Issuer"],
+            ValidAudience = config["JwtConfig:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(key)
+        };
 
-            var response = new
-            {
-                Status = "Error",
-                Message = "Invalid or missing token.",
-                Errors = new List<string> { context.Exception.Message }
-            };
-
-            var json = JsonSerializer.Serialize(response);
-            return context.Response.WriteAsync(json);
-        },
-        OnChallenge = context =>
+        // Custom error handling
+        options.Events = new JwtBearerEvents
         {
-            context.HandleResponse(); // Suppress default challenge
-
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
-
-            var response = new
+            OnAuthenticationFailed = context =>
             {
-                Status = "Error",
-                Message = "Authentication required."
-            };
+                context.NoResult(); // Prevent default behavior
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
 
-            var json = JsonSerializer.Serialize(response);
-            return context.Response.WriteAsync(json);
-        }
-    };
+                var response = ApiResponse<object>.Error("Invalid or expired token.", new List<string> { context.Exception.Message });
+                return context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            },
+            OnChallenge = context =>
+            {
+                context.HandleResponse(); // Suppress default
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
 
-
-});
+                var response = ApiResponse<object>.Error("Authentication required.");
+                return context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            }
+        };
+    });
 
 builder.Services.AddAuthorization();
 
-
-// CORS
-var allowedOrigins = "_allowedOrigins";
-
+// CORS Policy
+const string allowedOrigins = "_allowedOrigins";
 builder.Services.AddCors(options =>
 {
-options.AddPolicy(allowedOrigins, builder =>
+    options.AddPolicy(allowedOrigins, policy =>
     {
-        builder
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader();
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
     });
 });
 
-
 var app = builder.Build();
 
+// Swagger UI in Dev
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+// Middleware order matters!
 app.UseMiddleware<ExceptionMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors(allowedOrigins);
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(allowedOrigins);
 app.MapControllers();
 
 app.Run();

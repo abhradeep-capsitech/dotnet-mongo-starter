@@ -27,5 +27,11 @@
             public UnauthorizedException(string message, List<string>? errors = null)
                 : base(message, 401, errors) { }
         }
+
+        public class ForbiddenException : ApiException
+        {
+            public ForbiddenException(string message, List<string>? errors = null)
+                : base(message, 403, errors) { }
+        }
     }
 }

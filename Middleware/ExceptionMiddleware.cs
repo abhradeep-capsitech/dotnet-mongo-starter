@@ -31,34 +31,35 @@ namespace DotnetMongoStarter.Middleware
         private Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             context.Response.ContentType = "application/json";
-            var response = new ApiResponse<object>();
+            var path = context.Request.Path;
+            var isDev = context.RequestServices.GetService<IWebHostEnvironment>()?.IsDevelopment() ?? false;
 
-            switch (exception)
+            var response = exception switch
             {
-                case UnauthorizedException unauthorizedEx:
-                    context.Response.StatusCode = unauthorizedEx.StatusCode;
-                    response = ApiResponse<object>.Error(unauthorizedEx.Message, unauthorizedEx.Errors);
-                    break;
-
-                case ApiException apiEx:
-                    context.Response.StatusCode = apiEx.StatusCode;
-                    response = ApiResponse<object>.Error(apiEx.Message, apiEx.Errors);
-                    break;
-
-                case MongoException mongoEx:
-                    context.Response.StatusCode = 500;
-                    response = ApiResponse<object>.Error("Database error occurred.", new List<string> { mongoEx.Message });
-                    _logger.LogError(mongoEx, "MongoDB error occurred.");
-                    break;
-
-                default:
-                    context.Response.StatusCode = 500;
-                    response = ApiResponse<object>.Error("An unexpected error occurred.", new List<string> { exception.Message });
-                    _logger.LogError(exception, "Unexpected error occurred.");
-                    break;
-            }
+                UnauthorizedException ex => CreateResponse(context, ex, 401, path, "Unauthorized"),
+                NotFoundException ex => CreateResponse(context, ex, 404, path, "Not Found"),
+                ValidationException ex => CreateResponse(context, ex, 400, path, "Validation failed"),
+                ForbiddenException ex => CreateResponse(context, ex, 403, path, "Forbidden"),
+                ApiException ex => CreateResponse(context, ex, ex.StatusCode, path, "API error"),
+                MongoException ex => CreateResponse(context, "Database error occurred.", 500, path, isDev ? ex.Message : null),
+                _ => CreateResponse(context, "An unexpected error occurred.", 500, path, isDev ? exception.Message : null)
+            };
 
             return context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+
+        private ApiResponse<object> CreateResponse(HttpContext context, ApiException ex, int statusCode, string path, string logMessage)
+        {
+            context.Response.StatusCode = statusCode;
+            _logger.LogWarning(ex, $"{logMessage}: {path}");
+            return ApiResponse<object>.Error(ex.Message, ex.Errors);
+        }
+
+        private ApiResponse<object> CreateResponse(HttpContext context, string message, int statusCode, string path, string? devError = null)
+        {
+            context.Response.StatusCode = statusCode;
+            _logger.LogError($"{message}: {path}");
+            return ApiResponse<object>.Error(message, devError != null ? new List<string> { devError } : null);
         }
     }
 }

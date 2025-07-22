@@ -33,11 +33,11 @@ namespace DotnetMongoStarter.Controllers
                                      .ToList();
                 throw new ValidationException("Validation failed.", errors);
             }
-
-            var existingUser = await _userService.GetUserByEmail(body.Email);
-            if (existingUser != null)
+            
+            var user = await _userService.GetUserByEmail(body.Email);
+            if(user != null)
             {
-                throw new ValidationException("User already exists.", new List<string> { "Email is already registered." });
+                throw new ApiException("User already exists.", 400, new List<string> { "User already exists." });
             }
 
             var hashedPassword = BCrypt.Net.BCrypt.HashPassword(body.Password);
@@ -48,11 +48,6 @@ namespace DotnetMongoStarter.Controllers
                 Password = hashedPassword,
                 Role = body.Role
             });
-
-            if (newUser == null)
-            {
-                throw new ApiException("Failed to create user.", 500);
-            }
 
             var (accessToken, refreshToken) = _tokenService.GenerateTokens(newUser);
             await _userService.SaveUserToken(newUser.Id!, refreshToken);
@@ -80,9 +75,9 @@ namespace DotnetMongoStarter.Controllers
             }
 
             var user = await _userService.GetUserByEmail(body.Email);
-            if (user == null)
+            if(user == null)
             {
-                throw new NotFoundException("User not found.");
+                throw new ApiException("User not found.", 404, new List<string> { "User not found." });
             }
 
             if (!BCrypt.Net.BCrypt.Verify(body.Password, user.Password))
@@ -115,10 +110,6 @@ namespace DotnetMongoStarter.Controllers
 
             var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
             var user = await _userService.GetUserById(userId!);
-            if (user == null)
-            {
-                throw new NotFoundException("User not found.");
-            }
 
             var (accessToken, refreshToken) = _tokenService.GenerateTokens(user);
             await _userService.SaveUserToken(user.Id!, refreshToken);
@@ -158,10 +149,6 @@ namespace DotnetMongoStarter.Controllers
             }
 
             var user = await _userService.GetUserById(userId);
-            if (user == null)
-            {
-                throw new NotFoundException("User not found.");
-            }
 
             user.Password = null;
             user.RefreshToken = null;
