@@ -3,7 +3,6 @@ using DotnetMongoStarter.Db;
 using DotnetMongoStarter.Models;
 using DotnetMongoStarter.Utils;
 using MongoDB.Driver;
-using static DotnetMongoStarter.Utils.ApiException;
 
 namespace DotnetMongoStarter.Services
 {
