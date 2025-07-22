@@ -1,0 +1,44 @@
+# .NET build output
+bin/
+obj/
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# Rider
+.idea/
+
+# Logs & temp
+*.log
+*.tmp
+*.bak
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Secrets
+secrets.json
+.env
+*.pfx
+*.key
+*.pem
+
+# Configs (optional)
+appsettings.*.json
+!appsettings.json
+
+# Test results
+TestResult*/
+*.coverage
+*.coveragexml
+
+# NuGet
+packages/
+*.nupkg
